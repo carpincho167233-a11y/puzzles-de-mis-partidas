@@ -9,7 +9,7 @@ const PORT = Number(process.env.PORT || 10000);
 const MAX_GAMES = 80;
 const MAX_BODY = 12 * 1024 * 1024;
 const WINDOW_MS = 10 * 60 * 1000;
-const MAX_REQUESTS = 3;
+const MAX_REQUESTS = 20;
 const hits = new Map();
 let busy = false;
 
