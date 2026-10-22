@@ -1,0 +1,18 @@
+{
+  "name": "puzzles-de-mis-partidas",
+  "version": "1.0.0",
+  "description": "Convierte tus partidas de Lichess y Chess.com en puzzles, con Stockfish en el navegador.",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node test/lichess-cases.mjs 1200000 equilibrada"
+  },
+  "dependencies": {
+    "chess.js": "1.4.0",
+    "chessground": "9.2.1",
+    "esbuild": "0.28.2",
+    "stockfish": "19.0.1"
+  }
+}
