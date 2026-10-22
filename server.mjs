@@ -73,7 +73,7 @@ async function createEngine() {
         onLine: null,
         send: command => {
           if (!child.stdin.writable) throw new Error('La entrada de Stockfish está cerrada.');
-          child.stdin.write(command + '\\n');
+          child.stdin.write(command + '\n');
         },
         terminate: () => { try { child.kill(); } catch {} },
       };
@@ -81,7 +81,7 @@ async function createEngine() {
       child.stdout.setEncoding('utf8');
       child.stdout.on('data', chunk => {
         buffer += chunk;
-        const lines = buffer.split(/\\r?\\n/);
+        const lines = buffer.split(/\r?\n/);
         buffer = lines.pop() || '';
         for (const line of lines) if (transport.onLine) transport.onLine(line.trim());
       });
