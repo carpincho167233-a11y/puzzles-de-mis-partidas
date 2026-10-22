@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,34 +56,62 @@ function rateLimited(ip) {
 }
 async function createEngine() {
   return new Promise((resolve, reject) => {
-    let transport;
+    let child;
     let engine;
-    let timeout;
+    let settled = false;
+    let buffer = '';
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try { child?.kill(); } catch {}
+      reject(new Error('Stockfish tardó demasiado en iniciar.'));
+    }, 30000);
     try {
-      const sf = Stockfish('lite-single', line => {
-        if (transport?.onLine) transport.onLine(String(line));
-      });
-      transport = {
+      const enginePath = Stockfish.findEngine('lite-single');
+      child = spawn(process.execPath, [enginePath], { stdio: ['pipe', 'pipe', 'pipe'] });
+      const transport = {
         onLine: null,
-        send: command => sf.processCommand(command),
-        terminate: () => { try { sf.terminate(); } catch {} },
+        send: command => {
+          if (!child.stdin.writable) throw new Error('La entrada de Stockfish está cerrada.');
+          child.stdin.write(command + '\\n');
+        },
+        terminate: () => { try { child.kill(); } catch {} },
       };
       engine = new UciEngine(transport);
-      timeout = setTimeout(() => {
-        transport.terminate();
-        reject(new Error('Stockfish tardó demasiado en iniciar.'));
-      }, 30000);
+      child.stdout.setEncoding('utf8');
+      child.stdout.on('data', chunk => {
+        buffer += chunk;
+        const lines = buffer.split(/\\r?\\n/);
+        buffer = lines.pop() || '';
+        for (const line of lines) if (transport.onLine) transport.onLine(line.trim());
+      });
+      child.stderr.on('data', chunk => console.warn('[stockfish]', String(chunk).trim()));
+      child.on('error', error => {
+        if (!settled) { settled = true; clearTimeout(timeout); reject(error); }
+      });
+      child.on('exit', (code, signal) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timeout);
+          reject(new Error(`Stockfish terminó al iniciar (code=${code}, signal=${signal}).`));
+        }
+      });
       engine.init({ hash: 64 }).then(() => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timeout);
         resolve(engine);
       }, error => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timeout);
         transport.terminate();
         reject(error);
       });
     } catch (error) {
+      settled = true;
       clearTimeout(timeout);
-      try { transport?.terminate(); } catch {}
+      try { child?.kill(); } catch {}
       reject(error);
     }
   });
