@@ -1,5 +1,8 @@
 import http from 'node:http';
-import Stockfish from 'stockfish';
+import { createRequire } from 'node:module';
+import { UciEngine } from './src/core.js';
+const require = createRequire(import.meta.url);
+const Stockfish = require('stockfish');
 import { Generator, PRESETS } from './src/core.js';
 
 const PORT = Number(process.env.PORT || 10000);
@@ -42,17 +45,38 @@ function rateLimited(ip) {
   return false;
 }
 async function createEngine() {
-  const sf = await Stockfish();
-  const transport = {
-    onLine: null,
-    send: command => sf.postMessage(command),
-    terminate: () => { try { sf.terminate?.(); } catch {} },
-  };
-  sf.addMessageListener(line => { if (transport.onLine) transport.onLine(String(line)); });
-  const { UciEngine } = await import('./src/core.js');
-  const engine = new UciEngine(transport);
-  await engine.init({ hash: 64 });
-  return engine;
+  return new Promise((resolve, reject) => {
+    let transport;
+    let engine;
+    let timeout;
+    try {
+      const sf = Stockfish('lite-single', line => {
+        if (transport?.onLine) transport.onLine(String(line));
+      });
+      transport = {
+        onLine: null,
+        send: command => sf.processCommand(command),
+        terminate: () => { try { sf.terminate(); } catch {} },
+      };
+      engine = new UciEngine(transport);
+      timeout = setTimeout(() => {
+        transport.terminate();
+        reject(new Error('Stockfish tardó demasiado en iniciar.'));
+      }, 30000);
+      engine.init({ hash: 64 }).then(() => {
+        clearTimeout(timeout);
+        resolve(engine);
+      }, error => {
+        clearTimeout(timeout);
+        transport.terminate();
+        reject(error);
+      });
+    } catch (error) {
+      clearTimeout(timeout);
+      try { transport?.terminate(); } catch {}
+      reject(error);
+    }
+  });
 }
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') { send(res, 204, {}); return; }
