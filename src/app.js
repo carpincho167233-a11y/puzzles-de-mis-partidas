@@ -242,7 +242,7 @@ async function startRun() {
     R.phase = 'analyze'; R.tAnalyze = Date.now(); touch();
     const apiBase = (window.PUZZLE_ANALYSIS_API || 'https://puzzles-analysis-api.onrender.com').replace(/\/$/, '');
     const options = { preset: cfg.preset, exigencia: cfg.exigencia, onlyMe: cfg.onlyMe, maxPerGame: cfg.maxPerGame };
-    const batchSize = 40;
+    const batchSize = 2;
     for (let i = 0; i < games.length && !R.stopped; i += batchSize) {
       if (signal.aborted) throw new DOMException('abort', 'AbortError');
       const batch = games.slice(i, i + batchSize);
