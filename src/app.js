@@ -1,8 +1,7 @@
 import { Chessground } from 'chessground';
 import { Chess } from 'chess.js';
-import { Generator, PRESETS, uciFrom, uciTo, uciPromo } from './core.js';
+import { uciFrom, uciTo, uciPromo } from './core.js';
 import { fetchLichess, fetchChesscom, gameFromPgn, splitPgn } from './sources.js';
-import { createBrowserEngine } from './engine-browser.js';
 import { h, store, fmtDate, fmtDuration, SPEED_LABEL, SITE_LABEL, sanLine, lineText, fenAfter, puzzleLabel, toPgn, toCsv, download } from './util.js';
 
 /* ───────────── Estado ───────────── */
