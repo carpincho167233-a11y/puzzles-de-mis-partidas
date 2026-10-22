@@ -158,7 +158,22 @@ export class UciEngine {
   }
   _await(test, collect) {
     return new Promise((resolve, reject) => {
-      this.cur = { reject, onLine: (l) => { if (collect) collect(l); if (test(l)) { this.cur = null; resolve(l); } } };
+      const timeout = setTimeout(() => {
+        if (this.cur === current) this.cur = null;
+        reject(new Error('Stockfish no respondió a tiempo.'));
+      }, 120000);
+      const current = {
+        reject: (error) => { clearTimeout(timeout); reject(error); },
+        onLine: (l) => {
+          if (collect) collect(l);
+          if (test(l)) {
+            clearTimeout(timeout);
+            if (this.cur === current) this.cur = null;
+            resolve(l);
+          }
+        },
+      };
+      this.cur = current;
     });
   }
   async init({ hash = 32 } = {}) {
