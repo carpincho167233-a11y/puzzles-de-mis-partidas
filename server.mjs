@@ -79,12 +79,14 @@ async function createEngine() {
   });
 }
 const server = http.createServer(async (req, res) => {
+  const pathname = new URL(req.url || '/', 'http://localhost').pathname.replace(/\\/$/, '') || '/';
   if (req.method === 'OPTIONS') { send(res, 204, {}); return; }
-  if (req.method === 'GET' && req.url === '/healthz') { send(res, 200, { ok: true, busy }); return; }
-  if (req.method !== 'POST' || req.url !== '/api/analyze') { send(res, 404, { error: 'No encontrado.' }); return; }
+  if (req.method === 'GET' && pathname === '/healthz') { send(res, 200, { ok: true, busy }); return; }
+  if (req.method !== 'POST' || pathname !== '/api/analyze') { send(res, 404, { error: 'No encontrado.' }); return; }
+  console.log(`[request] POST ${pathname}`);
   const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   if (rateLimited(ip)) { send(res, 429, { error: 'Demasiados análisis seguidos. Esperá unos minutos.' }); return; }
-  if (busy) { send(res, 429, { error: 'El servidor está analizando otras partidas. Probá de nuevo en un momento.' }); return; }
+  if (busy) { console.warn('[request] rechazado: motor ocupado'); send(res, 429, { error: 'El servidor está analizando otras partidas. Probá de nuevo en un momento.' }); return; }
   busy = true;
   let engine;
   try {
@@ -106,8 +108,10 @@ const server = http.createServer(async (req, res) => {
       try { puzzles.push(...await gen.analyseGame(game)); seen.push(`${game.site}:${game.id}`); }
       catch { errors.push(`${game.site || ''}:${game.id || 'partida'}`); }
     }
+    console.log(`[request] completado: ${body.games.length} partidas, ${puzzles.length} puzzles, ${errors.length} errores`);
     send(res, 200, { puzzles, errors, seen, analyzed: body.games.length });
   } catch (e) {
+    console.error('[request] fallo:', e?.stack || e);
     if (!res.headersSent) send(res, e.status || 500, { error: e.message || 'Error interno al analizar.' });
   } finally {
     try { engine?.terminate(); } catch {}
