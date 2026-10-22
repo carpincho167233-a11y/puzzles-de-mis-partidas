@@ -239,41 +239,31 @@ async function startRun() {
       return finishRun();
     }
 
-    // motores
-    R.phase = 'engine'; touch();
-    const K = Math.max(1, Math.min(cfg.threads || defaultThreads(), games.length));
-    try {
-      R.engines = await Promise.all(Array.from({ length: K }, () => createBrowserEngine({ hash: 32 })));
-    } catch (e) {
-      R.engines.forEach((x) => x.terminate());
-      R.failMsg = (e && e.message) || 'No pude iniciar Stockfish en este navegador.';
-      return finishRun();
-    }
-    if (signal.aborted) throw new DOMException('abort', 'AbortError');
-
-    // análisis
+    // El análisis pesado corre en el servidor; el navegador solo descarga y muestra las partidas/puzzles.
     R.phase = 'analyze'; R.tAnalyze = Date.now(); touch();
-    const opts = { ...PRESETS[cfg.preset], exigencia: cfg.exigencia, onlyMe: cfg.onlyMe, maxPerGame: cfg.maxPerGame };
-    const cache = new Map();
-    const queue = games.slice();
-    await Promise.all(R.engines.map(async (eng) => {
-      const gen = new Generator(eng, opts, cache);
-      while (!R.stopped) {
-        const g = queue.shift();
-        if (!g) break;
-        try {
-          const ps = await gen.analyseGame(g);
-          for (const p of ps) addPuzzle(p, g);
-        } catch (e) {
-          if (R.stopped) return;
-          R.errors++;
-        }
-        S.seen.add(`${g.site}:${g.id}`);
-        R.done++;
-        if (R.done % 5 === 0) persist.seen();
-        touch();
+    const apiBase = (window.PUZZLE_ANALYSIS_API || 'https://puzzles-analysis-api.onrender.com').replace(/\/$/, '');
+    const options = { preset: cfg.preset, exigencia: cfg.exigencia, onlyMe: cfg.onlyMe, maxPerGame: cfg.maxPerGame };
+    const batchSize = 40;
+    for (let i = 0; i < games.length && !R.stopped; i += batchSize) {
+      if (signal.aborted) throw new DOMException('abort', 'AbortError');
+      const batch = games.slice(i, i + batchSize);
+      const response = await fetch(apiBase + '/api/analyze', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ games: batch, options }), signal,
+      });
+      let result;
+      try { result = await response.json(); } catch { result = {}; }
+      if (!response.ok) throw new Error(result.error || `El servidor respondió ${response.status}.`);
+      for (const p of result.puzzles || []) {
+        const g = batch.find(x => x.id === p.gameId || (x.site === p.site && x.id === p.gameId)) || batch[0];
+        addPuzzle(p, g);
       }
-    }));
+      for (const id of result.seen || []) S.seen.add(id);
+      R.errors += (result.errors || []).length;
+      R.done += batch.length;
+      persist.seen();
+      touch();
+    }
   } catch (e) {
     if (!(e && e.name === 'AbortError')) R.failMsg = (e && e.message) || String(e);
   }
