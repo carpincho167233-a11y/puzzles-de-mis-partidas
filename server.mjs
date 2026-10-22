@@ -1,7 +1,16 @@
 import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { UciEngine } from './src/core.js';
 const require = createRequire(import.meta.url);
+// La build Node de Stockfish espera este nombre genérico, pero el paquete instala
+// el WASM con versión en el nombre. Copiarlo evita ENOENT al iniciar el motor.
+const sfBin = path.join(path.dirname(fileURLToPath(import.meta.url)), 'node_modules/stockfish/bin');
+const expectedWasm = path.join(sfBin, 'stockfish.wasm');
+const bundledWasm = path.join(sfBin, 'stockfish-19-lite-single.wasm');
+if (!fs.existsSync(expectedWasm) && fs.existsSync(bundledWasm)) fs.copyFileSync(bundledWasm, expectedWasm);
 const Stockfish = require('stockfish');
 import { Generator, PRESETS } from './src/core.js';
 
