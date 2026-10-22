@@ -79,7 +79,8 @@ async function createEngine() {
   });
 }
 const server = http.createServer(async (req, res) => {
-  const pathname = new URL(req.url || '/', 'http://localhost').pathname.replace(/\\/$/, '') || '/';
+  let pathname = new URL(req.url || '/', 'http://localhost').pathname;
+  if (pathname.length > 1 && pathname.endsWith('/')) pathname = pathname.slice(0, -1);
   if (req.method === 'OPTIONS') { send(res, 204, {}); return; }
   if (req.method === 'GET' && pathname === '/healthz') { send(res, 200, { ok: true, busy }); return; }
   if (req.method !== 'POST' || pathname !== '/api/analyze') { send(res, 404, { error: 'No encontrado.' }); return; }
